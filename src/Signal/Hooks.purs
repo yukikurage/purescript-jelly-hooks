@@ -3,12 +3,12 @@ module Signal.Hooks where
 import Prelude
 
 import Control.Monad.Reader (ReaderT, ask, lift, runReaderT)
-import Control.Monad.State (StateT, state)
+import Control.Monad.State (StateT)
 import Control.Monad.Writer (WriterT, runWriterT, tell)
 import Data.Tuple (Tuple(..))
 import Effect (Effect)
 import Effect.Class (class MonadEffect)
-import Signal (Signal, readSignal, runSignal, send, signal)
+import Signal (Signal, runSignal)
 
 class Monad m <= MonadClean m where
   useCleaner :: Effect Unit -> m Unit
