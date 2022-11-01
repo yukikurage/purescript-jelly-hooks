@@ -5,10 +5,13 @@ import Prelude
 import Control.Monad.Reader (ReaderT, ask, lift, runReaderT)
 import Control.Monad.State (StateT)
 import Control.Monad.Writer (WriterT, runWriterT, tell)
+import Data.Maybe (Maybe(..))
 import Data.Tuple (Tuple(..))
 import Effect (Effect)
-import Effect.Class (class MonadEffect)
-import Signal (Signal, runSignal)
+import Effect.Aff (Aff, launchAff_)
+import Effect.Class (class MonadEffect, liftEffect)
+import Effect.Ref (modify, new, read)
+import Signal (Signal, memoSignal, newState, runSignal, writeChannel)
 
 class Monad m <= MonadClean m where
   useCleaner :: Effect Unit -> m Unit
@@ -43,6 +46,7 @@ derive newtype instance Apply (Hooks r)
 derive newtype instance Applicative (Hooks r)
 derive newtype instance Bind (Hooks r)
 derive newtype instance Monad (Hooks r)
+derive newtype instance MonadEffect (Hooks r)
 instance MonadClean (Hooks r) where
   useCleaner cleaner = Hooks $ tell cleaner
 
@@ -53,11 +57,22 @@ runHooks :: forall r a. Hooks r a -> Record r -> Effect (Tuple a (Effect Unit))
 runHooks (Hooks m) r = runWriterT (runReaderT m r)
 
 useHooks
-  :: forall r m
+  :: forall r m a
    . MonadHooks r m
-  => Signal (Hooks r Unit)
-  -> m Unit
+  => Signal (Hooks r a)
+  -> m (Signal a)
 useHooks sig = do
+  context <- useContext
+  Tuple res cln <- memoSignal $ sig <#> \hooks -> runHooks hooks context
+  useCleaner cln
+  pure res
+
+useHooks_
+  :: forall r m a
+   . MonadHooks r m
+  => Signal (Hooks r a)
+  -> m Unit
+useHooks_ sig = do
   context <- useContext
   let
     sig' = sig <#> \hooks -> do
@@ -65,13 +80,33 @@ useHooks sig = do
       pure cleaner
   useCleaner =<< runSignal sig'
 
--- useMemo
---   :: forall r m a
---    . MonadHooks r m
---   => Signal (Hooks r a)
---   -> m (Signal a)
--- useMemo sig = do
---   Tuple stateSig stateChn <- signal =<< readSignal sig
---   useHooks $ sig <#> \hooks -> do
---     a <- hooks
---     send stateChn a
+useEffect
+  :: forall r m a
+   . MonadHooks r m
+  => Signal (Effect a)
+  -> m (Signal a)
+useEffect sig = useHooks $ sig <#> liftEffect
+
+useEffect_
+  :: forall r m a
+   . MonadHooks r m
+  => Signal (Effect a)
+  -> m Unit
+useEffect_ = void <<< useEffect
+
+useAff :: forall r m a. MonadHooks r m => Signal (Aff a) -> m (Signal (Maybe a))
+useAff sig = do
+  currentRef <- liftEffect $ new 0
+  Tuple resSig chn <- newState Nothing
+  let
+    sig' = sig <#> \aff -> do
+      current <- liftEffect $ modify (_ + 1) currentRef
+      launchAff_ do
+        a <- aff
+        current' <- liftEffect $ read currentRef
+        when (current == current') $ writeChannel chn $ Just a
+  useEffect_ sig'
+  pure resSig
+
+useAff_ :: forall r m a. MonadHooks r m => Signal (Aff a) -> m Unit
+useAff_ sig = useEffect_ $ sig <#> \aff -> launchAff_ $ void aff

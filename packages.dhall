@@ -105,10 +105,7 @@ let upstream =
 in  upstream
   with simple-signal =
       { dependencies =
-          [ "effect"
-          , "prelude"
-          , "refs"
-          ]
+          [ "effect", "prelude", "refs", "tuples", "unsafe-coerce" ]
       , repo =
           "https://github.com/yukikurage/purescript-simple-signal.git"
       , version =

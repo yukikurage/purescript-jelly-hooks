@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "npx spago build",
+    "test": "npx spago -x spago-test.dhall run -m Test.Main"
   },
   "author": "",
   "license": "MIT",
