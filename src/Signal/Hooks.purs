@@ -3,6 +3,7 @@ module Signal.Hooks where
 import Prelude
 
 import Control.Monad.Reader (ReaderT, ask, lift, runReaderT)
+import Control.Monad.Rec.Class (class MonadRec)
 import Control.Monad.State (StateT)
 import Control.Monad.Writer (WriterT, runWriterT, tell)
 import Data.Maybe (Maybe(..))
@@ -17,31 +18,17 @@ import Web.Event.Event (Event, EventType)
 import Web.Event.EventTarget (addEventListener, eventListener, removeEventListener)
 import Web.Event.Internal.Types (EventTarget)
 
-class Monad m <= MonadClean m where
-  useCleaner :: Effect Unit -> m Unit
+class MonadEffect m <= MonadHooks r m | m -> r where
+  liftHooks :: forall a. Hooks r a -> m a
 
-instance (MonadClean m, Monoid w) => MonadClean (WriterT w m) where
-  useCleaner = lift <<< useCleaner
+instance (MonadHooks r m, Monoid w) => MonadHooks r (WriterT w m) where
+  liftHooks = lift <<< liftHooks
 
-instance MonadClean m => MonadClean (ReaderT r m) where
-  useCleaner = lift <<< useCleaner
+instance MonadHooks r m => MonadHooks r (ReaderT r' m) where
+  liftHooks = lift <<< liftHooks
 
-instance MonadClean m => MonadClean (StateT s m) where
-  useCleaner = lift <<< useCleaner
-
-class Monad m <= MonadContext r m | m -> r where
-  useContext :: m (Record r)
-
-instance (MonadContext r m, Monoid w) => MonadContext r (WriterT w m) where
-  useContext = lift useContext
-
-instance MonadContext r m => MonadContext r (ReaderT r' m) where
-  useContext = lift useContext
-
-instance MonadContext r m => MonadContext r (StateT s m) where
-  useContext = lift useContext
-
-class (MonadContext r m, MonadEffect m, MonadClean m) <= MonadHooks r m | m -> r
+instance MonadHooks r m => MonadHooks r (StateT s m) where
+  liftHooks = lift <<< liftHooks
 
 newtype Hooks r a = Hooks (ReaderT (Record r) (WriterT (Effect Unit) Effect) a)
 
@@ -51,11 +38,9 @@ derive newtype instance Applicative (Hooks r)
 derive newtype instance Bind (Hooks r)
 derive newtype instance Monad (Hooks r)
 derive newtype instance MonadEffect (Hooks r)
-instance MonadClean (Hooks r) where
-  useCleaner cleaner = Hooks $ tell cleaner
-
-instance MonadContext r (Hooks r) where
-  useContext = Hooks ask
+derive newtype instance MonadRec (Hooks r)
+instance MonadHooks r (Hooks r) where
+  liftHooks = identity
 
 runHooks :: forall r m a. MonadEffect m => Hooks r a -> Record r -> m (Tuple a (Effect Unit))
 runHooks (Hooks m) r = liftEffect $ runWriterT (runReaderT m r)
@@ -65,22 +50,20 @@ runHooks_ m r = do
   Tuple a _ <- runHooks m r
   pure a
 
-useHooks
-  :: forall r m a
-   . MonadHooks r m
-  => Signal (Hooks r a)
-  -> m (Signal a)
+useCleaner :: forall r m. MonadHooks r m => Effect Unit -> m Unit
+useCleaner cleaner = liftHooks $ Hooks $ tell cleaner
+
+useContext :: forall r m. MonadHooks r m => m (Record r)
+useContext = liftHooks $ Hooks ask
+
+useHooks :: forall r m a. MonadHooks r m => Signal (Hooks r a) -> m (Signal a)
 useHooks sig = do
   context <- useContext
   Tuple res cln <- memoSignal $ sig <#> \h -> runHooks h context
   useCleaner cln
   pure res
 
-useHooks_
-  :: forall r m a
-   . MonadHooks r m
-  => Signal (Hooks r a)
-  -> m Unit
+useHooks_ :: forall r m a. MonadHooks r m => Signal (Hooks r a) -> m Unit
 useHooks_ sig = do
   context <- useContext
   let
@@ -89,18 +72,10 @@ useHooks_ sig = do
       pure cleaner
   useCleaner =<< runSignal sig'
 
-useEffect
-  :: forall r m a
-   . MonadHooks r m
-  => Signal (Effect a)
-  -> m (Signal a)
+useEffect :: forall r m a. MonadHooks r m => Signal (Effect a) -> m (Signal a)
 useEffect sig = useHooks $ sig <#> liftEffect
 
-useEffect_
-  :: forall r m a
-   . MonadHooks r m
-  => Signal (Effect a)
-  -> m Unit
+useEffect_ :: forall r m a. MonadHooks r m => Signal (Effect a) -> m Unit
 useEffect_ = void <<< useEffect
 
 useAff :: forall r m a. MonadHooks r m => Signal (Aff a) -> m (Signal (Maybe a))
@@ -151,10 +126,3 @@ useTimeout ms handler = do
       timeout <- liftEffect $ setTimeout ms $ callback unit
       pure $ clearTimeout timeout
   useSubscriber subscribe $ const handler
-
-hooks :: forall r m a. MonadHooks r m => Hooks r (m a) -> m a
-hooks m = do
-  context <- useContext
-  Tuple a cln <- runHooks m context
-  useCleaner cln
-  a
