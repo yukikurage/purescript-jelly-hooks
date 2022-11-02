@@ -11,7 +11,11 @@ import Effect (Effect)
 import Effect.Aff (Aff, launchAff_)
 import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Ref (modify, new, read)
+import Effect.Timer (clearInterval, clearTimeout, setInterval, setTimeout)
 import Signal (Signal, memoSignal, newState, runSignal, writeChannel)
+import Web.Event.Event (Event, EventType)
+import Web.Event.EventTarget (addEventListener, eventListener, removeEventListener)
+import Web.Event.Internal.Types (EventTarget)
 
 class Monad m <= MonadClean m where
   useCleaner :: Effect Unit -> m Unit
@@ -53,8 +57,13 @@ instance MonadClean (Hooks r) where
 instance MonadContext r (Hooks r) where
   useContext = Hooks ask
 
-runHooks :: forall r a. Hooks r a -> Record r -> Effect (Tuple a (Effect Unit))
-runHooks (Hooks m) r = runWriterT (runReaderT m r)
+runHooks :: forall r m a. MonadEffect m => Hooks r a -> Record r -> m (Tuple a (Effect Unit))
+runHooks (Hooks m) r = liftEffect $ runWriterT (runReaderT m r)
+
+runHooks_ :: forall r a. Hooks r a -> Record r -> Effect a
+runHooks_ m r = do
+  Tuple a _ <- runHooks m r
+  pure a
 
 useHooks
   :: forall r m a
@@ -63,7 +72,7 @@ useHooks
   -> m (Signal a)
 useHooks sig = do
   context <- useContext
-  Tuple res cln <- memoSignal $ sig <#> \hooks -> runHooks hooks context
+  Tuple res cln <- memoSignal $ sig <#> \h -> runHooks h context
   useCleaner cln
   pure res
 
@@ -75,8 +84,8 @@ useHooks_
 useHooks_ sig = do
   context <- useContext
   let
-    sig' = sig <#> \hooks -> do
-      Tuple _ cleaner <- runHooks hooks context
+    sig' = sig <#> \h -> do
+      Tuple _ cleaner <- runHooks h context
       pure cleaner
   useCleaner =<< runSignal sig'
 
@@ -110,3 +119,42 @@ useAff sig = do
 
 useAff_ :: forall r m a. MonadHooks r m => Signal (Aff a) -> m Unit
 useAff_ sig = useEffect_ $ sig <#> \aff -> launchAff_ $ void aff
+
+useSubscriber :: forall r m e. MonadHooks r m => ((e -> Effect Unit) -> Effect (Effect Unit)) -> (e -> Hooks r Unit) -> m Unit
+useSubscriber subscribe handler = do
+  Tuple sig chn <- newState $ pure unit
+  sub <- liftEffect $ subscribe \e -> writeChannel chn $ handler e *> pure unit
+  useCleaner sub
+  useHooks_ sig
+
+useEvent :: forall r m. MonadHooks r m => EventTarget -> EventType -> (Event -> Hooks r Unit) -> m Unit
+useEvent target eventType handler = do
+  let
+    subscribe callback = do
+      el <- liftEffect $ eventListener callback
+      liftEffect $ addEventListener eventType el false target
+      pure $ removeEventListener eventType el false target
+  useSubscriber subscribe handler
+
+useInterval :: forall r m. MonadHooks r m => Int -> Hooks r Unit -> m Unit
+useInterval ms handler = do
+  let
+    subscribe callback = do
+      interval <- liftEffect $ setInterval ms $ callback unit
+      pure $ clearInterval interval
+  useSubscriber subscribe $ const handler
+
+useTimeout :: forall r m. MonadHooks r m => Int -> Hooks r Unit -> m Unit
+useTimeout ms handler = do
+  let
+    subscribe callback = do
+      timeout <- liftEffect $ setTimeout ms $ callback unit
+      pure $ clearTimeout timeout
+  useSubscriber subscribe $ const handler
+
+hooks :: forall r m a. MonadHooks r m => Hooks r (m a) -> m a
+hooks m = do
+  context <- useContext
+  Tuple a cln <- runHooks m context
+  useCleaner cln
+  a

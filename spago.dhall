@@ -14,12 +14,14 @@ to generate this file without the comments in this block.
 , dependencies =
   [ "aff"
   , "effect"
+  , "js-timers"
   , "maybe"
   , "prelude"
   , "refs"
   , "simple-signal"
   , "transformers"
   , "tuples"
+  , "web-events"
   ]
 , packages = ./packages.dhall
 , sources = [ "src/**/*.purs" ]
