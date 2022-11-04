@@ -164,11 +164,11 @@ liftHooks m = do
 -- | Nub a Eq value of Signal.
 nubEq :: forall m a. MonadHooks m => Eq a => Signal a -> m (Signal a)
 nubEq sig = do
-  chn <- newChannel $ unsafeCoerce unit
+  Tuple sig' chn <- newState $ unsafeCoerce unit
   useHooks_ $ sig <#> \a -> do
-    prev <- readSignal $ subscribe chn
+    prev <- readSignal sig'
     unless (a == prev) $ writeChannel chn a
-  pure $ subscribe chn
+  pure sig'
 
 newStateEq :: forall m a. MonadHooks m => Eq a => a -> m (Tuple (Signal a) (Channel a))
 newStateEq a = do
