@@ -12,7 +12,8 @@ import Effect.Aff (Aff, launchAff_)
 import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Ref (modify, new, read, write)
 import Effect.Timer (clearInterval, clearTimeout, setInterval, setTimeout)
-import Signal (Signal, memoSignal, newState, writeChannel)
+import Signal (Channel, Signal, memoSignal, newChannel, newState, readSignal, subscribe, writeChannel)
+import Unsafe.Coerce (unsafeCoerce)
 import Web.Event.Event (Event, EventType)
 import Web.Event.EventTarget (addEventListener, eventListener, removeEventListener)
 import Web.Event.Internal.Types (EventTarget)
@@ -159,3 +160,18 @@ liftHooks m = do
   Tuple a cln <- runHooks m
   useCleaner cln
   pure a
+
+-- | Nub a Eq value of Signal.
+nubEq :: forall m a. MonadHooks m => Eq a => Signal a -> m (Signal a)
+nubEq sig = do
+  chn <- newChannel $ unsafeCoerce unit
+  useHooks_ $ sig <#> \a -> do
+    prev <- readSignal $ subscribe chn
+    unless (a == prev) $ writeChannel chn a
+  pure $ subscribe chn
+
+newStateEq :: forall m a. MonadHooks m => Eq a => a -> m (Tuple (Signal a) (Channel a))
+newStateEq a = do
+  Tuple sig chn <- newState a
+  sig' <- nubEq sig
+  pure $ Tuple sig' chn
