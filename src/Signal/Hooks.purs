@@ -6,7 +6,7 @@ import Control.Monad.Reader (ReaderT, ask, lift, runReaderT)
 import Control.Monad.Rec.Class (class MonadRec)
 import Control.Monad.Writer (WriterT, runWriterT, tell)
 import Data.Maybe (Maybe(..))
-import Data.Tuple (Tuple(..))
+import Data.Tuple (Tuple(..), fst, snd)
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff_)
 import Effect.Class (class MonadEffect, liftEffect)
@@ -26,6 +26,14 @@ instance MonadHooks m => MonadHooks (ReaderT r m) where
   useHooks sig = do
     r <- ask
     lift $ useHooks $ flip runReaderT r <$> sig
+
+instance (MonadHooks m, Monoid w) => MonadHooks (WriterT (Signal w) m) where
+  useCleaner = lift <<< useCleaner
+  -- Maybe a little non-trivial implementation.
+  useHooks sig = do
+    sigAW <- lift $ useHooks $ runWriterT <$> sig
+    tell $ join $ snd <$> sigAW
+    pure $ fst <$> sigAW
 
 useHooks_ :: forall m a. MonadHooks m => Signal (m a) -> m Unit
 useHooks_ sig = void $ useHooks sig
