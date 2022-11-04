@@ -116,3 +116,9 @@ runHooks_ :: forall a. Hooks a -> Effect a
 runHooks_ m = do
   Tuple a _ <- runHooks m
   pure a
+
+liftHooks :: forall m a. MonadHooks m => Hooks a -> m a
+liftHooks m = do
+  Tuple a cln <- runHooks m
+  useCleaner cln
+  pure a
