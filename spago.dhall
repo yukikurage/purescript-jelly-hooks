@@ -19,6 +19,7 @@ to generate this file without the comments in this block.
   , "prelude"
   , "refs"
   , "simple-signal"
+  , "tailrec"
   , "transformers"
   , "tuples"
   , "web-events"

@@ -10,7 +10,7 @@ import Data.Tuple (Tuple(..), fst, snd)
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff_)
 import Effect.Class (class MonadEffect, liftEffect)
-import Effect.Ref (modify, new, read)
+import Effect.Ref (modify, new, read, write)
 import Effect.Timer (clearInterval, clearTimeout, setInterval, setTimeout)
 import Signal (Signal, memoSignal, newState, writeChannel)
 import Web.Event.Event (Event, EventType)
@@ -68,6 +68,7 @@ useSubscriber subscribe handler = do
   useCleaner sub
   useHooks_ sig
 
+-- | Subscribe to an event on an event target.
 useEvent :: forall m. MonadHooks m => EventTarget -> EventType -> (Event -> m Unit) -> m Unit
 useEvent target eventType handler = do
   let
@@ -77,6 +78,7 @@ useEvent target eventType handler = do
       pure $ removeEventListener eventType el false target
   useSubscriber subscribe handler
 
+-- | A hook that runs an effect every `n` milliseconds.
 useInterval :: forall m. MonadHooks m => Int -> m Unit -> m Unit
 useInterval ms handler = do
   let
@@ -85,6 +87,7 @@ useInterval ms handler = do
       pure $ clearInterval interval
   useSubscriber subscribe $ const handler
 
+-- | A hook that runs a handler after a given number of milliseconds.
 useTimeout :: forall m. MonadHooks m => Int -> m Unit -> m Unit
 useTimeout ms handler = do
   let
@@ -92,6 +95,14 @@ useTimeout ms handler = do
       timeout <- liftEffect $ setTimeout ms $ callback unit
       pure $ clearTimeout timeout
   useSubscriber subscribe $ const handler
+
+-- | A hook that runs the given effect when the signal changes. (without initialize)
+useUpdate :: forall m a. MonadHooks m => Signal a -> (a -> m Unit) -> m Unit
+useUpdate sig handler = do
+  isInit <- liftEffect $ new true
+  useHooks_ $ sig <#> \a -> do
+    init <- liftEffect $ read isInit
+    if init then liftEffect $ write false isInit *> mempty else handler a
 
 newtype Hooks a = Hooks (WriterT (Effect Unit) Effect a)
 
