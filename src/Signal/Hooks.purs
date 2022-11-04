@@ -41,8 +41,14 @@ useHooks_ sig = void $ useHooks sig
 useIf :: forall m a. MonadHooks m => Signal Boolean -> m a -> m a -> m (Signal a)
 useIf cond ifTrue ifFalse = useHooks $ cond <#> \c -> if c then ifTrue else ifFalse
 
+useIf_ :: forall m a. MonadHooks m => Signal Boolean -> m a -> m a -> m Unit
+useIf_ cond ifTrue ifFalse = void $ useIf cond ifTrue ifFalse
+
 useWhen :: forall m a. MonadHooks m => Signal Boolean -> m a -> m (Signal (Maybe a))
 useWhen cond ifTrue = useIf cond (Just <$> ifTrue) (pure Nothing)
+
+useWhen_ :: forall m a. MonadHooks m => Signal Boolean -> m a -> m Unit
+useWhen_ cond ifTrue = void $ useWhen cond ifTrue
 
 useEffect :: forall m a. MonadHooks m => Signal (Effect a) -> m (Signal a)
 useEffect sig = useHooks $ sig <#> liftEffect
