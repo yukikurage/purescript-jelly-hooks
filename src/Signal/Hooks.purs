@@ -18,7 +18,9 @@ import Web.Event.EventTarget (addEventListener, eventListener, removeEventListen
 import Web.Event.Internal.Types (EventTarget)
 
 class MonadEffect m <= MonadHooks m where
+  -- | Add a cleaner
   useCleaner :: Effect Unit -> m Unit
+  -- | Unwrap a Signal
   useHooks :: forall a. Signal (m a) -> m (Signal a)
 
 instance MonadHooks m => MonadHooks (ReaderT r m) where
@@ -35,27 +37,36 @@ instance (MonadHooks m, Monoid w) => MonadHooks (WriterT (Signal w) m) where
     tell $ join $ snd <$> sigAW
     pure $ fst <$> sigAW
 
+-- | Void version of `useHooks`
 useHooks_ :: forall m a. MonadHooks m => Signal (m a) -> m Unit
 useHooks_ sig = void $ useHooks sig
 
+-- | Conditionally switch Signal values.
 useIf :: forall m a. MonadHooks m => Signal Boolean -> m a -> m a -> m (Signal a)
 useIf cond ifTrue ifFalse = useHooks $ cond <#> \c -> if c then ifTrue else ifFalse
 
+-- | Void version of `useIf`
 useIf_ :: forall m a. MonadHooks m => Signal Boolean -> m a -> m a -> m Unit
 useIf_ cond ifTrue ifFalse = void $ useIf cond ifTrue ifFalse
 
+-- | `Just a` when `cond` is `true`, `Nothing` otherwise.
 useWhen :: forall m a. MonadHooks m => Signal Boolean -> m a -> m (Signal (Maybe a))
 useWhen cond ifTrue = useIf cond (Just <$> ifTrue) (pure Nothing)
 
+-- | Void version of `useWhen`
 useWhen_ :: forall m a. MonadHooks m => Signal Boolean -> m a -> m Unit
 useWhen_ cond ifTrue = void $ useWhen cond ifTrue
 
+-- | Unwrap effective Signal
 useEffect :: forall m a. MonadHooks m => Signal (Effect a) -> m (Signal a)
 useEffect sig = useHooks $ sig <#> liftEffect
 
+-- | Void version of `useEffect`
 useEffect_ :: forall m a. MonadHooks m => Signal (Effect a) -> m Unit
 useEffect_ = void <<< useEffect
 
+-- | Unwrap Aff Signal.
+-- | If the order of the results is reversed, it is ignored.
 useAff :: forall m a. MonadHooks m => Signal (Aff a) -> m (Signal (Maybe a))
 useAff sig = do
   currentRef <- liftEffect $ new 0
@@ -70,9 +81,11 @@ useAff sig = do
   useEffect_ sig'
   pure resSig
 
+-- | Void version of `useAff`
 useAff_ :: forall m a. MonadHooks m => Signal (Aff a) -> m Unit
 useAff_ sig = useEffect_ $ sig <#> \aff -> launchAff_ $ void aff
 
+-- | Subscribe to some Events
 useSubscriber :: forall m e. MonadHooks m => ((e -> Effect Unit) -> Effect (Effect Unit)) -> (e -> m Unit) -> m Unit
 useSubscriber subscribe handler = do
   Tuple sig chn <- newState $ pure unit
@@ -90,7 +103,7 @@ useEvent target eventType handler = do
       pure $ removeEventListener eventType el false target
   useSubscriber subscribe handler
 
--- | A hook that runs an effect every `n` milliseconds.
+-- | Subscribe to interval events.
 useInterval :: forall m. MonadHooks m => Int -> m Unit -> m Unit
 useInterval ms handler = do
   let
@@ -99,7 +112,7 @@ useInterval ms handler = do
       pure $ clearInterval interval
   useSubscriber subscribe $ const handler
 
--- | A hook that runs a handler after a given number of milliseconds.
+-- | Subscribe to timeout events.
 useTimeout :: forall m. MonadHooks m => Int -> m Unit -> m Unit
 useTimeout ms handler = do
   let
@@ -132,14 +145,15 @@ instance MonadHooks Hooks where
     Hooks $ tell cln
     pure res
 
+-- | Run a `Hooks` computation and return the result and a cleanup effect.
 runHooks :: forall m a. MonadEffect m => Hooks a -> m (Tuple a (Effect Unit))
 runHooks (Hooks m) = liftEffect $ runWriterT m
 
-runHooks_ :: forall a. Hooks a -> Effect a
-runHooks_ m = do
-  Tuple a _ <- runHooks m
-  pure a
+-- | Void version of `runHooks`.
+runHooks_ :: forall a. Hooks a -> Effect Unit
+runHooks_ m = void $ runHooks m
 
+-- | Lift `Hooks` to `m` which has `MonadHooks` instance.
 liftHooks :: forall m a. MonadHooks m => Hooks a -> m a
 liftHooks m = do
   Tuple a cln <- runHooks m
