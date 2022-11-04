@@ -109,12 +109,12 @@ useTimeout ms handler = do
   useSubscriber subscribe $ const handler
 
 -- | A hook that runs the given effect when the signal changes. (without initialize)
-useUpdate :: forall m a. MonadHooks m => Signal a -> (a -> m Unit) -> m Unit
-useUpdate sig handler = do
+useUpdate :: forall m. MonadHooks m => Signal (m Unit) -> m Unit
+useUpdate sig = do
   isInit <- liftEffect $ new true
-  useHooks_ $ sig <#> \a -> do
+  useHooks_ $ sig <#> \eff -> do
     init <- liftEffect $ read isInit
-    if init then liftEffect $ write false isInit *> mempty else handler a
+    if init then liftEffect $ write false isInit *> mempty else eff
 
 newtype Hooks a = Hooks (WriterT (Effect Unit) Effect a)
 
