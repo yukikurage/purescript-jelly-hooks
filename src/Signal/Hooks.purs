@@ -6,7 +6,7 @@ import Control.Monad.Reader (ReaderT, ask, lift, runReaderT)
 import Control.Monad.Rec.Class (class MonadRec)
 import Control.Monad.Writer (WriterT, runWriterT, tell)
 import Data.Maybe (Maybe(..))
-import Data.Tuple (Tuple(..), fst, snd)
+import Data.Tuple (Tuple(..))
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff_)
 import Effect.Class (class MonadEffect, liftEffect)
@@ -27,16 +27,14 @@ instance MonadHooks m => MonadHooks (ReaderT r m) where
     r <- ask
     lift $ useHooks $ flip runReaderT r <$> sig
 
-instance (MonadHooks m, Monoid w) => MonadHooks (WriterT (Signal w) m) where
-  useCleaner = lift <<< useCleaner
-  -- Maybe a little non-trivial implementation.
-  useHooks sig = do
-    sigAW <- lift $ useHooks $ runWriterT <$> sig
-    tell $ join $ snd <$> sigAW
-    pure $ fst <$> sigAW
-
 useHooks_ :: forall m a. MonadHooks m => Signal (m a) -> m Unit
 useHooks_ sig = void $ useHooks sig
+
+useIf :: forall m a. MonadHooks m => Signal Boolean -> m a -> m a -> m (Signal a)
+useIf cond ifTrue ifFalse = useHooks $ cond <#> \c -> if c then ifTrue else ifFalse
+
+useWhen :: forall m a. MonadHooks m => Signal Boolean -> m a -> m (Signal (Maybe a))
+useWhen cond ifTrue = useIf cond (Just <$> ifTrue) (pure Nothing)
 
 useEffect :: forall m a. MonadHooks m => Signal (Effect a) -> m (Signal a)
 useEffect sig = useHooks $ sig <#> liftEffect
