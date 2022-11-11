@@ -99,8 +99,8 @@ in  upstream
 -------------------------------
 -}
 let upstream =
-      https://github.com/purescript/package-sets/releases/download/psc-0.15.4-20221103/packages.dhall
-        sha256:26d3b3b4052e533534b9a888052a46b594abdd615cb56e58fde188b110480857
+      https://github.com/purescript/package-sets/releases/download/psc-0.15.4-20221110/packages.dhall
+        sha256:55be93ee309eeb1b3a1d30c7b9fa5d18ffefa67f5fbeec1566b7b6a70b0ac218
 
 in  upstream
   with simple-signal =

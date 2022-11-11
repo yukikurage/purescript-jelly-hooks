@@ -130,6 +130,21 @@ useUpdate sig = do
     init <- liftEffect $ read isInit
     if init then liftEffect $ write false isInit *> mempty else eff
 
+-- | Nub a Eq value of Signal.
+nubEq :: forall m a. MonadHooks m => Eq a => Signal a -> m (Signal a)
+nubEq sig = do
+  Tuple sig' chn <- newState $ unsafeCoerce unit
+  useHooks_ $ sig <#> \a -> do
+    prev <- readSignal sig'
+    unless (a == prev) $ writeChannel chn a
+  pure sig'
+
+newStateEq :: forall m a. MonadHooks m => Eq a => a -> m (Tuple (Signal a) (Channel a))
+newStateEq a = do
+  Tuple sig chn <- newState a
+  sig' <- nubEq sig
+  pure $ Tuple sig' chn
+
 newtype Hooks a = Hooks (WriterT (Effect Unit) Effect a)
 
 derive newtype instance Functor Hooks
@@ -160,18 +175,3 @@ liftHooks m = do
   Tuple a cln <- runHooks m
   useCleaner cln
   pure a
-
--- | Nub a Eq value of Signal.
-nubEq :: forall m a. MonadHooks m => Eq a => Signal a -> m (Signal a)
-nubEq sig = do
-  Tuple sig' chn <- newState $ unsafeCoerce unit
-  useHooks_ $ sig <#> \a -> do
-    prev <- readSignal sig'
-    unless (a == prev) $ writeChannel chn a
-  pure sig'
-
-newStateEq :: forall m a. MonadHooks m => Eq a => a -> m (Tuple (Signal a) (Channel a))
-newStateEq a = do
-  Tuple sig chn <- newState a
-  sig' <- nubEq sig
-  pure $ Tuple sig' chn
