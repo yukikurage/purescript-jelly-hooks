@@ -1,4 +1,4 @@
-# Simple Hooks
+# Jelly Hooks
 
 Hooks is a way to manage the application logic with [`simple-signal`](https://github.com/yukikurage/purescript-simple-signal).
 
