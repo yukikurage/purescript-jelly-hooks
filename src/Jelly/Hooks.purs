@@ -12,7 +12,7 @@ import Effect.Aff (Aff, launchAff_)
 import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Ref (modify, new, read, write)
 import Effect.Timer (clearInterval, clearTimeout, setInterval, setTimeout)
-import Jelly.Signal (Channel, Signal, memoSignal, newState, readSignal, writeChannel)
+import Jelly.Signal (Signal, memoSignal, newState, readSignal, writeChannel)
 import Unsafe.Coerce (unsafeCoerce)
 import Web.Event.Event (Event, EventType)
 import Web.Event.EventTarget (addEventListener, eventListener, removeEventListener)
@@ -32,7 +32,7 @@ instance MonadHooks m => MonadHooks (ReaderT r m) where
 
 instance (MonadHooks m, Monoid w) => MonadHooks (WriterT (Signal w) m) where
   useCleaner = lift <<< useCleaner
-  -- Maybe a little non-trivial implementation.
+  -- Maybe a little non-trivial implementation...
   useHooks sig = do
     sigAW <- lift $ useHooks $ runWriterT <$> sig
     tell $ join $ snd <$> sigAW
@@ -42,21 +42,9 @@ instance (MonadHooks m, Monoid w) => MonadHooks (WriterT (Signal w) m) where
 useHooks_ :: forall m a. MonadHooks m => Signal (m a) -> m Unit
 useHooks_ sig = void $ useHooks sig
 
--- | Conditionally switch Signal values.
-useIf :: forall m a. MonadHooks m => Signal Boolean -> m a -> m a -> m (Signal a)
-useIf cond ifTrue ifFalse = useHooks $ cond <#> \c -> if c then ifTrue else ifFalse
-
--- | Void version of `useIf`
-useIf_ :: forall m a. MonadHooks m => Signal Boolean -> m a -> m a -> m Unit
-useIf_ cond ifTrue ifFalse = void $ useIf cond ifTrue ifFalse
-
--- | `Just a` when `cond` is `true`, `Nothing` otherwise.
-useWhen :: forall m a. MonadHooks m => Signal Boolean -> m a -> m (Signal (Maybe a))
-useWhen cond ifTrue = useIf cond (Just <$> ifTrue) (pure Nothing)
-
--- | Void version of `useWhen`
-useWhen_ :: forall m a. MonadHooks m => Signal Boolean -> m a -> m Unit
-useWhen_ cond ifTrue = void $ useWhen cond ifTrue
+-- | Memorize a Signal
+useMemo :: forall m a. MonadHooks m => Signal a -> m (Signal a)
+useMemo sig = useHooks $ pure <$> sig
 
 -- | Unwrap effective Signal
 useEffect :: forall m a. MonadHooks m => Signal (Effect a) -> m (Signal a)
@@ -122,7 +110,7 @@ useTimeout ms handler = do
       pure $ clearTimeout timeout
   useSubscriber subscribe $ const handler
 
--- | A hook that runs the given effect when the signal changes. (without initialize)
+-- | A hook that runs the given effect when the signal changes. (same as `useHooks_`, but without initialize)
 useUpdate :: forall m. MonadHooks m => Signal (m Unit) -> m Unit
 useUpdate sig = do
   isInit <- liftEffect $ new true
@@ -131,19 +119,13 @@ useUpdate sig = do
     if init then liftEffect $ write false isInit *> mempty else eff
 
 -- | Nub a Eq value of Signal.
-nubEq :: forall m a. MonadHooks m => Eq a => Signal a -> m (Signal a)
-nubEq sig = do
+useNub :: forall m a. MonadHooks m => Eq a => Signal a -> m (Signal a)
+useNub sig = do
   Tuple sig' chn <- newState $ unsafeCoerce unit
   useHooks_ $ sig <#> \a -> do
     prev <- readSignal sig'
     unless (a == prev) $ writeChannel chn a
   pure sig'
-
-newStateEq :: forall m a. MonadHooks m => Eq a => a -> m (Tuple (Signal a) (Channel a))
-newStateEq a = do
-  Tuple sig chn <- newState a
-  sig' <- nubEq sig
-  pure $ Tuple sig' chn
 
 newtype Hooks a = Hooks (WriterT (Effect Unit) Effect a)
 
@@ -166,7 +148,7 @@ runHooks :: forall m a. MonadEffect m => Hooks a -> m (Tuple a (Effect Unit))
 runHooks (Hooks m) = liftEffect $ runWriterT m
 
 -- | Void version of `runHooks`.
-runHooks_ :: forall a. Hooks a -> Effect Unit
+runHooks_ :: forall m a. MonadEffect m => Hooks a -> m Unit
 runHooks_ m = void $ runHooks m
 
 -- | Lift `Hooks` to `m` which has `MonadHooks` instance.

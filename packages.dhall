@@ -99,12 +99,12 @@ in  upstream
 -------------------------------
 -}
 let upstream =
-      https://github.com/purescript/package-sets/releases/download/psc-0.15.4-20221110/packages.dhall
-        sha256:55be93ee309eeb1b3a1d30c7b9fa5d18ffefa67f5fbeec1566b7b6a70b0ac218
+      https://github.com/purescript/package-sets/releases/download/psc-0.15.4-20221122/packages.dhall
+        sha256:c0cfb849a0f886d38cab7bbf40a5c23911d82ba4f09946cbc9d7b5362f2b8819
 
 in  upstream
   with jelly-signal =
     { dependencies = [ "effect", "prelude", "refs", "tuples", "unsafe-coerce" ]
     , repo = "https://github.com/yukikurage/purescript-jelly-signal.git"
-    , version = "v0.2.0"
+    , version = "v0.3.0"
     }
