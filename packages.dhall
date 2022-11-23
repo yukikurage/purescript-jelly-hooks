@@ -106,5 +106,5 @@ in  upstream
   with jelly-signal =
     { dependencies = [ "effect", "prelude", "refs", "tuples", "unsafe-coerce" ]
     , repo = "https://github.com/yukikurage/purescript-jelly-signal.git"
-    , version = "v0.3.0"
+    , version = "v0.3.1"
     }
