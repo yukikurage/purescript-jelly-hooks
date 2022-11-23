@@ -127,6 +127,7 @@ useNub sig = do
     unless (a == prev) $ writeChannel chn a
   pure sig'
 
+-- | Create State which ignores the same value.
 useStateEq :: forall m a. MonadHooks m => Eq a => a -> m (Tuple (Signal a) (Channel a))
 useStateEq init = do
   Tuple sig chn <- newState init

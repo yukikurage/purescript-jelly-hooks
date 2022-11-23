@@ -5,12 +5,12 @@ import Prelude
 import Data.Tuple (Tuple(..))
 import Effect (Effect)
 import Effect.Class.Console (log)
-import Signal (writeChannel)
-import Signal.Hooks (newStateEq, runHooks_, useHooks_)
+import Jelly.Hooks (runHooks_, useHooks_, useStateEq)
+import Jelly.Signal (writeChannel)
 
 main :: Effect Unit
 main = runHooks_ do
-  Tuple nSig nChn <- newStateEq 0
+  Tuple nSig nChn <- useStateEq 0
   useHooks_ $ nSig <#> \n -> do
     log $ "n = " <> show n
   writeChannel nChn 1
