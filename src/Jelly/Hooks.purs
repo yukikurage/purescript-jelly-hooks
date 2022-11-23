@@ -12,7 +12,7 @@ import Effect.Aff (Aff, launchAff_)
 import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Ref (modify, new, read, write)
 import Effect.Timer (clearInterval, clearTimeout, setInterval, setTimeout)
-import Jelly.Signal (Signal, memoSignal, newState, readSignal, writeChannel)
+import Jelly.Signal (Channel, Signal, memoSignal, newState, readSignal, writeChannel)
 import Unsafe.Coerce (unsafeCoerce)
 import Web.Event.Event (Event, EventType)
 import Web.Event.EventTarget (addEventListener, eventListener, removeEventListener)
@@ -126,6 +126,12 @@ useNub sig = do
     prev <- readSignal sig'
     unless (a == prev) $ writeChannel chn a
   pure sig'
+
+useStateEq :: forall m a. MonadHooks m => Eq a => a -> m (Tuple (Signal a) (Channel a))
+useStateEq init = do
+  Tuple sig chn <- newState init
+  sig' <- useNub sig
+  pure $ Tuple sig' chn
 
 newtype Hooks a = Hooks (WriterT (Effect Unit) Effect a)
 
