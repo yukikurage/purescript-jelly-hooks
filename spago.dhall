@@ -14,15 +14,15 @@ to generate this file without the comments in this block.
 , dependencies =
   [ "aff"
   , "effect"
+  , "jelly-signal"
   , "js-timers"
   , "maybe"
+  , "partial"
   , "prelude"
   , "refs"
-  , "jelly-signal"
   , "tailrec"
   , "transformers"
   , "tuples"
-  , "unsafe-coerce"
   , "web-events"
   ]
 , packages = ./packages.dhall

@@ -5,7 +5,7 @@ import Prelude
 import Control.Monad.Reader (ReaderT, ask, lift, runReaderT)
 import Control.Monad.Rec.Class (class MonadRec)
 import Control.Monad.Writer (WriterT, runWriterT, tell)
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), fromJust)
 import Data.Tuple (Tuple(..), fst, snd)
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff_)
@@ -13,7 +13,7 @@ import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Ref (modify, new, read, write)
 import Effect.Timer (clearInterval, clearTimeout, setInterval, setTimeout)
 import Jelly.Signal (Channel, Signal, memoSignal, newState, readSignal, writeChannel)
-import Unsafe.Coerce (unsafeCoerce)
+import Partial.Unsafe (unsafePartial)
 import Web.Event.Event (Event, EventType)
 import Web.Event.EventTarget (addEventListener, eventListener, removeEventListener)
 import Web.Event.Internal.Types (EventTarget)
@@ -121,11 +121,11 @@ useUpdate sig = do
 -- | Nub a Eq value of Signal.
 useNub :: forall m a. MonadHooks m => Eq a => Signal a -> m (Signal a)
 useNub sig = do
-  Tuple sig' chn <- newState $ unsafeCoerce unit
+  Tuple sig' chn <- newState $ Nothing
   useHooks_ $ sig <#> \a -> do
     prev <- readSignal sig'
-    unless (a == prev) $ writeChannel chn a
-  pure sig'
+    unless (Just a == prev) $ writeChannel chn $ Just a
+  pure $ map (\a -> unsafePartial $ fromJust a) sig'
 
 -- | Create State which ignores the same value.
 useStateEq :: forall m a. MonadHooks m => Eq a => a -> m (Tuple (Signal a) (Channel a))
